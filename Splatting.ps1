@@ -26,3 +26,10 @@ $registerTask = @{
 }
 # I don't actually want to do this though :p
 # Register-ScheduledTask @registerTask
+
+"Hello World" | Out-File oldname.txt
+# Positional Splatting
+# Done by using an array
+$renameItem = 'oldname.txt', 'newname.txt'
+Rename-Item @renameItem
+Remove-Item $renameItem[1]
