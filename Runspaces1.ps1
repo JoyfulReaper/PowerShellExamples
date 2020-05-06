@@ -53,7 +53,7 @@ if(!$runspacePool.SetMaxRunspaces($maxThreads))
 $runspacePool.Open()
 
 try {
-    for($i = 0; $i -lt 100; $i++)
+    for($i = 0; $i -lt 300; $i++)
     {
         $instance = [PowerShell]::Create()
         $instance.RunspacePool = $runspacePool
@@ -71,7 +71,7 @@ try {
 
     while($jobs.Count -gt 0)
     {
-        $completed = $jobs | Where-Object {$_.AsyncResult.IsCompleted}
+        $completed = $jobs | Where-Object {$_.State -eq 'Completed'}
         foreach($complete in $completed)
         {
             [void]$jobs.Remove($complete)
@@ -82,14 +82,19 @@ try {
 
         $remaining = $jobs.Count
         Write-Output "Jobs Remaining $remaining"
-        Start-Sleep(1)
+        Start-Sleep -Seconds 2
     }
 } finally {
+    $running = $jobs | Where-Object {$_.State -eq 'Running'}
+    foreach($run in $running)
+    {
+        $run.Stop()
+    }
     if($jobs.Count -ne 0)
     {
         foreach($job in $jobs)
         {
-            $job.Instance.Stop()
+            $job.Instance.Dispose()
         }
     }
 
