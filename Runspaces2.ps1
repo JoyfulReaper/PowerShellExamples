@@ -9,6 +9,10 @@
 #
 # I will Continue to improve this as I can, and as I learn PowerShell Better
 # I am aware of PoshRSJob...
+#
+# This is a test of CreateOutOfProcessRunspace I kow some of the code isn't the best :(
+# Pull request welcome :)
+#
 
 #########################################################################################################################
 
@@ -36,46 +40,50 @@ $initialSessionState.Commands.Add($functionEntry)
 $runspace = [RunspaceFactory]::CreateOutOfProcessRunspace($null)
 $runspace.Open()
 
+$totalJobs = 40
+$completeJobs = 0
+$maxThreads = 5
+$startedJobs = 0;
+$count = 0;
+
 try {
-    for($i = 0; $i -lt 30; $i++)
+    while($completeJobs -le $totalJobs)
     {
-        $instance = [PowerShell]::Create($initialSessionState)
-        [void]$instance.AddCommand("Invoke-Function").AddParameter('number', $i)
-
-        $job = [PSCustomObject]@{
-            Id          = $instance.InstanceId
-            Instance    = $instance
-            AsyncResult = $instance.BeginInvoke()
-        } | Add-Member State -MemberType ScriptProperty -PassThru -Value {
-            $this.Instance.InvocationStateInfo.State
-        }
-        $jobs.Add($job)
-    }
-
-
-    while($jobs.Count -gt 0)
-    {
-        $completed = $jobs | Where-Object {$_.State -eq 'Completed'}
         $running = $jobs | Where-Object {$_.State -eq 'Running'}
         $running = $running.count
+        if($running -le $maxThreads -And $startedJobs -le $totalJobs)
+        {
+            echo "Adding more. Running: $running Complete: $completeJobs Started: $startedJobs"
+            $instance = [PowerShell]::Create($initialSessionState)
+            [void]$instance.AddCommand("Invoke-Function").AddParameter('number', $count)
+
+            $job = [PSCustomObject]@{
+                Id          = $instance.InstanceId
+                Instance    = $instance
+                AsyncResult = $instance.BeginInvoke()
+            } | Add-Member State -MemberType ScriptProperty -PassThru -Value {
+                $this.Instance.InvocationStateInfo.State
+            }
+            $jobs.Add($job)
+            $count++
+            $startedJobs++
+        }
+        $completed = $jobs | Where-Object {$_.State -eq 'Completed'}
         foreach($complete in $completed)
         {
             [void]$jobs.Remove($complete)
             $result = $complete.Instance.EndInvoke($complete.AsyncResult)
             Write-Output $result
             $complete.Instance.Dispose()
+            $completeJobs++
         }
-
-        $remaining = $jobs.Count
-        Write-Output "Jobs Remaining $remaining"
-        Write-Output "Jobs Running $running"
-        Start-Sleep -Seconds 2
     }
 } finally {
+    Start-Sleep -Seconds 2
     $running = $jobs | Where-Object {$_.State -eq 'Running'}
     foreach($run in $running)
     {
-        $run.Stop()
+        $run.instance.Stop()
     }
     if($jobs.Count -ne 0)
     {

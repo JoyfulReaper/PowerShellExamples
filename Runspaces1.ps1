@@ -88,7 +88,7 @@ try {
     $running = $jobs | Where-Object {$_.State -eq 'Running'}
     foreach($run in $running)
     {
-        $run.Stop()
+        $run.instance.Stop()
     }
     if($jobs.Count -ne 0)
     {
