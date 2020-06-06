@@ -18,7 +18,7 @@
 $script = {
     param([String]$number)
 
-    Start-Sleep -Seconds (Get-Random -Maximum 30)
+    Start-Sleep -Seconds (Get-Random -Maximum 10)
     return "I'm number $number"
 }
 
@@ -26,9 +26,9 @@ $script = {
 
 $jobs = New-Object Collections.Generic.List[PSCustomObject]
 
-$totalJobs = 100
+$totalJobs = 1000
 $completeJobs = 0
-$maxThreads = 5
+$maxThreads = 50
 $startedJobs = 0;
 $count = 0;
 
@@ -40,7 +40,7 @@ try {
 
         if($running -le $maxThreads -And $startedJobs -le $totalJobs)
         {
-            echo "Adding more. Running: $running MaxThreads: $maxThreads Complete: $completeJobs Started: $startedJobs"
+            echo "Starting thread $count. Running: $running MaxThreads: $maxThreads Complete: $completeJobs"
 
             $runspace = [RunspaceFactory]::CreateOutOfProcessRunspace($null)
             $runspace.Open()
@@ -66,9 +66,11 @@ try {
          foreach($complete in $completed)
          {
              [void]$jobs.Remove($complete)
+             $complete.Instance.Stop()
              $result = $complete.Instance.EndInvoke($complete.AsyncResult)
              Write-Output $result
-             Write-Output $instance.Streams.Error
+             $complete.instance.Runspace.Close()
+             $complete.instance.Runspace.Dispose()
              $complete.Instance.Dispose()
              $completeJobs++
          }
@@ -83,7 +85,9 @@ try {
     {
         foreach($job in $jobs)
         {
-            $job.Instance.Dispose()
+            $job.instance.Dispose()
+            $job.instance.Runspace.Close()
+            $job.instance.Runspace.Dispose()
         }
     }
 }
