@@ -10,17 +10,15 @@
 # I will Continue to improve this as I can, and as I learn PowerShell Better
 # I am aware of PoshRSJob...
 #
-# This is a test of CreateOutOfProcessRunspace I kow some of the code isn't the best :(
-# Pull request welcome :)
+# This is a test / example of CreateOutOfProcessRunspace
 #
 
 #########################################################################################################################
 
-function Invoke-Function
-{
+$script = {
     param([String]$number)
 
-    Start-Sleep -Seconds (Get-Random -Maximum 10)
+    Start-Sleep -Seconds (Get-Random -Maximum 30)
     return "I'm number $number"
 }
 
@@ -28,19 +26,7 @@ function Invoke-Function
 
 $jobs = New-Object Collections.Generic.List[PSCustomObject]
 
-$function = Get-Command Invoke-Function
-$functionEntry = [System.Management.Automation.Runspaces.SessionStateFunctionEntry]::new(
-    $function.Name,
-    $function.Definition
-)
-
-$initialSessionState = [initialsessionstate]::CreateDefault2()
-$initialSessionState.Commands.Add($functionEntry)
-
-$runspace = [RunspaceFactory]::CreateOutOfProcessRunspace($null)
-$runspace.Open()
-
-$totalJobs = 40
+$totalJobs = 100
 $completeJobs = 0
 $maxThreads = 5
 $startedJobs = 0;
@@ -51,11 +37,18 @@ try {
     {
         $running = $jobs | Where-Object {$_.State -eq 'Running'}
         $running = $running.count
+
         if($running -le $maxThreads -And $startedJobs -le $totalJobs)
         {
-            echo "Adding more. Running: $running Complete: $completeJobs Started: $startedJobs"
-            $instance = [PowerShell]::Create($initialSessionState)
-            [void]$instance.AddCommand("Invoke-Function").AddParameter('number', $count)
+            echo "Adding more. Running: $running MaxThreads: $maxThreads Complete: $completeJobs Started: $startedJobs"
+
+            $runspace = [RunspaceFactory]::CreateOutOfProcessRunspace($null)
+            $runspace.Open()
+            $instance = [PowerShell]::Create()
+            $instance.Runspace = $runspace
+
+            #$script = Get-Content -Path .\testS.ps1
+            [void]$instance.AddScript($script).AddArgument($count)
 
             $job = [PSCustomObject]@{
                 Id          = $instance.InstanceId
@@ -68,18 +61,19 @@ try {
             $count++
             $startedJobs++
         }
-        $completed = $jobs | Where-Object {$_.State -eq 'Completed'}
-        foreach($complete in $completed)
-        {
-            [void]$jobs.Remove($complete)
-            $result = $complete.Instance.EndInvoke($complete.AsyncResult)
-            Write-Output $result
-            $complete.Instance.Dispose()
-            $completeJobs++
-        }
+
+         $completed = $jobs | Where-Object {$_.State -eq 'Completed'}
+         foreach($complete in $completed)
+         {
+             [void]$jobs.Remove($complete)
+             $result = $complete.Instance.EndInvoke($complete.AsyncResult)
+             Write-Output $result
+             Write-Output $instance.Streams.Error
+             $complete.Instance.Dispose()
+             $completeJobs++
+         }
     }
 } finally {
-    Start-Sleep -Seconds 2
     $running = $jobs | Where-Object {$_.State -eq 'Running'}
     foreach($run in $running)
     {
@@ -92,7 +86,4 @@ try {
             $job.Instance.Dispose()
         }
     }
-
-    $runspace.Close()
-    $runspace.Dispose()
 }
